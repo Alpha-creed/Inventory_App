@@ -1,6 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 
@@ -134,12 +134,100 @@ const logout = asyncHandler(async(req,res)=>{
 
 //Get User Data
 const getUser = asyncHandler(async(req,res)=>{
-    res.send("Get User Data")
+    const user = await User.findById(req.user._id)
+
+    if(user){
+        const {_id,name,email,photo,phone,bio} = user;
+        res.status(200).json({
+            _id,
+            name,
+            email,
+            photo,
+            phone,
+            bio,
+        });
+    }else{
+        res.status(400)
+        throw new Error("User not found") ;
+    }
 });
+
+//Get Login Status
+const loggedInStat = asyncHandler(async(req,res)=>{
+    
+    const token = req.cookies.token;
+    if(!token){
+        return res.json(false)
+    }
+
+    //Verify token
+    const verified = jwt.verify(token,process.env.JWT_SECRET);
+    if(verified){
+        return res.json(true)
+    }
+    return res.json(false)
+})
+
+//Update user
+const updateUser = asyncHandler(async(req,res)=>{
+    const user = await User.findById(req.user._id)
+
+    if(user){
+        const {_id,name,email,photo,phone,bio} =user;
+        user.email = email;
+        user.name = req.body.name||name;
+        user.photo = req.body.photo||photo;
+        user.phone = req.body.phone||phone;
+        user.bio = req.body.bio||bio;
+
+        const updateUser = await user.save()
+        res.status(200).json({
+            _id:updateUser._id,
+            name:updateUser.name,
+            email:updateUser.email,
+            photo:updateUser.photo,
+            bio:updateUser.bio,
+        })
+    }
+})
+
+const changePassword = asyncHandler(async(req,res)=>{
+    const user = await User.findById(req.user._id);
+    const {oldPassword,password} = req.body
+
+    //Validate
+    if(!user){
+        res.status(400)
+        throw new Error("User not found ,please signup");
+    }
+
+    if(!oldPassword || !password){
+        res.status(400);
+        throw new Error("Please add old and new password");
+    }
+
+    //check if oldpassword matches password in DB
+    const passwordIsCorrect = await bcrypt.compare(oldPassword,
+        user.password)
+    
+    //Save new password
+    if(user && passwordIsCorrect){
+        user.password = password
+        await user.save()
+        res.status(200).send("Password change successful");
+    }else{
+        res.status(400)
+        throw new Error("Old password is incorrect");
+    }
+
+})
 
 module.exports = {
     registerUser,
     loginUser,
     logout,
     getUser,
+    loggedInStat,
+    updateUser,
+    changePassword,
 }
